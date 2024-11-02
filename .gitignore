@@ -1,0 +1,6 @@
+__pycache__
+.vscode
+*.elf
+*.bin
+build
+data/doom1.wad
