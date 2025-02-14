@@ -24,11 +24,11 @@ RSA_MOD = int.from_bytes([
     0xcf, 0xce, 0xb6, 0x24, 0x5e, 0x2e, 0x99, 0x94, 0xc1, 0xc0, 0xa5, 0xfa, 0x13, 0xff, 0x27, 0x14,
     0x28, 0xad, 0x63, 0xdf, 0x2e, 0x68, 0xa2, 0xf4, 0x7b, 0xfc, 0x4f, 0xe7, 0x22, 0x85, 0xcb, 0xd0,
     0x9c, 0x40, 0xfb, 0x3f, 0xa8, 0x25, 0x77, 0x10, 0x8b, 0x11, 0x43, 0x8a, 0x1b, 0xe2, 0xb3, 0x83,
-])
+], byteorder='big')
 
 RSA_EXP = int.from_bytes([
     0x01, 0x00, 0x01,
-])
+], byteorder='big')
 
 # https://lapo.it/asn1js/#MDEwDQYJYIZIAWUDBAIBBQAEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 ASN1_PREFIX = b'\x30\x31\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x01\x05\x00\x04\x20'
@@ -42,7 +42,7 @@ def get_remaining_size(f):
     return size
 
 def verify_signature(signature, hash):
-    result = pow(signature, RSA_EXP, RSA_MOD).to_bytes(0x100)
+    result = pow(signature, RSA_EXP, RSA_MOD).to_bytes(0x100, byteorder='big')
 
     if result[0] != 0x00 or result[1] != 0x01:
         print('Invalid signature')
@@ -83,7 +83,7 @@ def verify(f):
     size -= 0x100
 
     # Calculate body hash
-    cipher = AES.new(AES_KEY, AES.MODE_CTR, nonce=AES_IV)
+    cipher = AES.new(AES_KEY, AES.MODE_CTR, nonce=AES_IV[:12])
     sha256 = hashlib.sha256()
     while size > 0:
         to_read = min(size, 0x10000)
@@ -93,7 +93,7 @@ def verify(f):
         size -= to_read
 
     # Read and decrypt the signature
-    signature = int.from_bytes(cipher.decrypt(f.read(0x100)))
+    signature = int.from_bytes(cipher.decrypt(f.read(0x100)), byteorder='big')
 
     if verify_signature(signature, sha256.digest()) != True:
         print('Error: Invalid signature')
@@ -109,7 +109,7 @@ def encrypt(f, outf):
     # Add file signature
     outf.write(b'CIPH\x00\x00\x00\x00')
 
-    cipher = AES.new(AES_KEY, AES.MODE_CTR, nonce=AES_IV)
+    cipher = AES.new(AES_KEY, AES.MODE_CTR, nonce=AES_IV[:12])
     while size > 0:
         to_read = min(size, 0x10000)
 
@@ -134,7 +134,7 @@ def decrypt(f, outf):
     # Don't count signature
     size -= 0x100
 
-    cipher = AES.new(AES_KEY, AES.MODE_CTR, nonce=AES_IV)
+    cipher = AES.new(AES_KEY, AES.MODE_CTR, nonce=AES_IV[:12])
     sha256 = hashlib.sha256()
     while size > 0:
         to_read = min(size, 0x10000)
@@ -166,8 +166,8 @@ def main(argc, argv):
     if argc < 3:
         print_usage(argv[0])
 
-    if len(AES_KEY) == 0 or len(AES_IV) == 0:
-        print('Update AES_KEY and AES_IV in key.py')
+    if len(AES_KEY) != 16 or len(AES_IV) < 12:
+        print('Error: Update AES_KEY and AES_IV in key.py')
         sys.exit(1)
 
     f = open(argv[2], 'rb')
